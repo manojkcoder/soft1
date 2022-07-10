@@ -40,7 +40,7 @@ if (!defined('WPINC')) {
  */
 define('PLUGIN_NAME_VERSION', '1.0.0');
 
-require_once(__DIR__ . './helpers.php');
+require_once(__DIR__ . '/helpers.php');
 
 class OBSWoocommerceCustomSoft1
 {
