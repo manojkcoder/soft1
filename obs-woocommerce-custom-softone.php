@@ -53,7 +53,7 @@ class OBSWoocommerceCustomSoft1
 	{
 		add_action('admin_menu', array($this, 'obs_woocommerce_custom_soft1_add_plugin_page'));
 		add_action('admin_init', array($this, 'obs_woocommerce_custom_soft1_page_init'));
-		add_action('obs_soft1_import_products_event', array($this, 'insert_products'), 10, 1);
+		//add_action('obs_soft1_import_products_event', array($this, 'insert_products'), 10, 1);
 		add_filter('cron_schedules',  array('OBSWoocommerceCustomSoft1', 'custom_cron_schedules'));
 		register_activation_hook(__FILE__, array($this, 'activate_obs_woocommerce_custom_soft1'));
 		register_deactivation_hook(__FILE__, array($this, 'deactivate_obs_woocommerce_custom_soft1'));
@@ -213,53 +213,26 @@ class OBSWoocommerceCustomSoft1
 		$obs_woocommerce_custom_soft1_options = get_option('obs_woocommerce_custom_soft1_option_name');
 		// print_r($obs_woocommerce_custom_soft1_options);
 
+   
+
 		$data = [
-			"service" => "getBrowserInfo",
+			"service" => "SqlData",
 			"clientID" => $client_id,
 			"appId" => $obs_woocommerce_custom_soft1_options["appId"],
-			"object" => "ITEM",
-			"list" => "SiteStock",
-			"filters" => ""
+			"SqlName" => "MTRL_BALANCE_SHISHA",
+			"param1"  => "2022"
 		];
 		// print_r($data);
 		$response_data = $this->get_api_response($data)['body'];
-		if ($response_data) {
-			$response_data = json_decode(iconv("Windows-1253", "UTF-8", $response_data), TRUE);
-			$fields = array_map(function ($value) {
-				return str_replace('ITEM.', '', $value['name']);
-			}, $response_data['fields']);
-			$data = [
-				"service" => "getBrowserData",
-				"clientID" => $client_id,
-				"appId" => $obs_woocommerce_custom_soft1_options["appId"],
-				"reqID" => $response_data['reqID'],
-				"start" => 0,
-				"limit" => 20000
-			];
-			$response_data = $this->get_api_response($data)['body'];
-			$response_data = json_decode(iconv("Windows-1253", "UTF-8", $response_data), TRUE);
-			foreach ($response_data['rows'] as $key => $row) {
-				$row = array_combine($fields, $row);
-				//$stocks[$row['MTRL_MTRSUBSTITUTE_CODE']] = $row['QTYET'];
-				$stocks[$row['MTRL_MTRSUBSTITUTE_CODE']] = $row['QTYET'];
-				$raw_data[] = ['MTRL_MTRSUBSTITUTE_CODE' => $row['MTRL_MTRSUBSTITUTE_CODE'], 'QTYET' => $row['QTYET']];
-			}
-		}
-		if (count($stocks)) {
+		$products = json_decode(iconv("Windows-1253", "UTF-8", $response_data), TRUE);
+		
+		if (count($products)) {
 			$data = [];
 
-			foreach ($stocks as $key => $qty) {
-				$product_id = OBSWoocommerceCustomSoft1Helpers::find_product_id($key, 'MTRL_MTRSUBSTITUTE_CODE');
+			foreach ($products as $product) {
+				$product_id = OBSWoocommerceCustomSoft1Helpers::find_product_id($key, '_sku');
 				if ($product_id) {
-					if (isset($_GET['print_stock'])) {
-						echo $product_id . ' - ' . $qty . '<br>';
-					} elseif (isset($_REQUEST['export_stock_csv'])) {
-						$data[] = ['MTRL_MTRSUBSTITUTE_CODE' => $key, 'product_id' => $product_id, 'stock' => $qty];
-					} elseif (isset($_REQUEST['export_stock_raw_csv'])) {
-						$data[] = ['MTRL_MTRSUBSTITUTE_CODE' => $key, 'product_id' => $product_id, 'stock' => $qty];
-					} else {
-						OBSWoocommerceCustomSoft1Helpers::update_stock($product_id, $qty);
-					}
+					OBSWoocommerceCustomSoft1Helpers::update_stock($product_id, $qty);
 				}
 			}
 			//print_r($stocks);
@@ -274,94 +247,7 @@ class OBSWoocommerceCustomSoft1
 		}
 	}
 
-	public function obs_woocommerce_custom_soft1_get_products()
-	{
-
-		$client_id = $this->get_client_id();
-		$product_data = [];
-
-		$obs_woocommerce_custom_soft1_options = get_option('obs_woocommerce_custom_soft1_option_name');
-		// print_r($obs_woocommerce_custom_soft1_options);
-
-		$data = [
-			"service" => "getBrowserInfo",
-			"clientID" => $client_id,
-			"appId" => $obs_woocommerce_custom_soft1_options["appId"],
-			"object" => "ITEM",
-			"list" => "SiteItems",
-			"filters" => ""
-		];
-		// print_r($data);
-		$response_data = $this->get_api_response($data)['body'];
-		if ($response_data) {
-			$response_data = json_decode(iconv("Windows-1253", "UTF-8", $response_data), TRUE);
-			// echo '<pre>';
-			// print_r($response_data);
-			if ($response_data['reqID']) {
-				$fields = array_map(function ($value) {
-					return str_replace('ITEM.', '', $value['name']);
-				}, $response_data['fields']);
-				$data = [
-					"service" => "getBrowserData",
-					"clientID" => $client_id,
-					"appId" => $obs_woocommerce_custom_soft1_options["appId"],
-					"reqID" => $response_data['reqID'],
-					"start" => 0,
-					"limit" => 999999
-				];
-				$response_data = $this->get_api_response($data)['body'];
-				$response_data = json_decode(iconv("Windows-1253", "UTF-8", $response_data), TRUE);
-
-				if (isset($_REQUEST['export_csv'])) {
-					foreach ($response_data['rows'] as $key => $row) {
-						$response_data['rows'][$key] = array_combine($fields, $row);
-					}
-					$this->jsonToCSV($response_data['rows']);
-					return;
-				}
-				foreach ($response_data['rows'] as $key => $row) {
-					$row = array_combine($fields, $row);
-					$row['MTRL_MTRSUBSTITUTE_CODE'] = str_pad($row['MTRL_MTRSUBSTITUTE_CODE'], 13, '0', STR_PAD_LEFT);
-					if (!isset($product_data[$row['MTRL']])) {
-						$product_data[$row['MTRL']] = [];
-					}
-					if ($row['WEBNAME'])
-						$product_data[$row['MTRL']][] = $row;
-				}
-				//$product_data = array_reverse();
-				$product_data = array_filter($product_data);
-				$parts = array_chunk($product_data, 50, true);
-				$counter = 0;
-				foreach ($parts as $part) {
-					//do_action('obs_soft1_import_products_event', $part);
-					wp_schedule_single_event(time() + ($counter * 120), 'obs_soft1_import_products_event', array($part));
-					$counter++;
-				}
-				echo 'EVENTS SCHEDULED, import should complete in roughly ' . ($counter * 2) . ' mins.';
-				wp_mail('info@obstechnologies.com', 'PE74: Started Product Import', 'PE74: Started Product Import');
-			}
-		}
-	}
-	public function obs_test_import()
-	{
-		$rows = json_decode('[]', true);
-		foreach ($rows as $key => $row) {
-			$row['MTRL_MTRSUBSTITUTE_CODE'] = str_pad($row['MTRL_MTRSUBSTITUTE_CODE'], 13, '0', STR_PAD_LEFT);
-			if (!isset($product_data[$row['MTRL']])) {
-				$product_data[$row['MTRL']] = [];
-			}
-			if ($row['WEBNAME'])
-				$product_data[$row['MTRL']][] = $row;
-		}
-		$parts = array_chunk($product_data, 50, true);
-		$counter = 0;
-		foreach ($parts as $part) {
-			do_action('obs_soft1_import_products_event', $part);
-			//wp_schedule_single_event( time() + ($counter * 120), 'obs_soft1_import_products_event', array( $part ) );
-			$counter++;
-		}
-		echo 'EVENTS SCHEDULED, import should complete in roughly ' . ($counter * 2) . ' mins.';
-	}
+	
 	public function slugify($string)
 	{
 		$slug = preg_replace("/&#?[a-z0-9]{2,8};/i", "", $string);
@@ -370,380 +256,7 @@ class OBSWoocommerceCustomSoft1
 		return $slug;
 	}
 
-	public function insert_product($product_data)
-	{
-		if (empty($product_data[0]['CODE'])) {
-			return;
-		}
-
-		$variations = [];
-		$categories = [];
-		$images = [];
-
-		foreach ($product_data[0] as $key => $value) {
-			if (in_array($key, ['FT1', 'FT2', 'FT3', 'FT4', 'FT5', 'FT6']) && $value) {
-				$image_id = attachment_url_to_postid($value);
-				if ($image_id) {
-					$images[] = $image_id;
-				}
-			}
-		}
-		//echo '<pre>';
-		//, 'CtgB', 'CtgC', 'CtgD'])){
-		if (isset($product_data[0]['CtgA']) && $product_data[0]['CtgA']) {
-			$value = $product_data[0]['CtgA'];
-			if ($term = OBSWoocommerceCustomSoft1Helpers::find_term_by('slug', $value, 'product_cat', 'ARRAY_A', true)) {
-				$parent_id = $term['term_id'];
-				$categories[] = $parent_id;
-				if (isset($product_data[0]['CtgB']) && $product_data[0]['CtgB']) {
-					$value = $product_data[0]['CtgB'];
-					$sub_parent_id = OBSWoocommerceCustomSoft1Helpers::find_child($parent_id, $value, 'product_cat', true);
-					$categories[] = $sub_parent_id;
-					if (isset($product_data[0]['CtgC']) && $product_data[0]['CtgC']) {
-						$sub_value = $product_data[0]['CtgC'];
-						$sub_sub_parent_id = OBSWoocommerceCustomSoft1Helpers::find_child($sub_parent_id, $sub_value, 'product_cat', true);
-						$categories[] = $sub_sub_parent_id;
-						if (isset($product_data[0]['CtgD']) && $product_data[0]['CtgD']) {
-							$sub_sub_value = $product_data[0]['CtgD'];
-							$categories[] = OBSWoocommerceCustomSoft1Helpers::find_child($sub_sub_parent_id, $sub_sub_value, 'product_cat', true);
-						}
-					}
-				}
-			}
-		}
-
-		if (isset($product_data[0]['ALCA']) && $product_data[0]['ALCA']) {
-			$value = $product_data[0]['ALCA'];
-			if ($term = OBSWoocommerceCustomSoft1Helpers::find_term_by('slug', $value, 'product_cat', 'ARRAY_A', true)) {
-				$parent_id = $term['term_id'];
-				$categories[] = $parent_id;
-				if (isset($product_data[0]['ALCB']) && $product_data[0]['ALCB']) {
-					$value = $product_data[0]['ALCB'];
-					$sub_parent_id = OBSWoocommerceCustomSoft1Helpers::find_child($parent_id, $value, 'product_cat', true);
-					$categories[] = $sub_parent_id;
-					if (isset($product_data[0]['ALCC']) && $product_data[0]['ALCC']) {
-						$sub_value = $product_data[0]['ALCC'];
-						$sub_sub_parent_id = OBSWoocommerceCustomSoft1Helpers::find_child($sub_parent_id, $sub_value, 'product_cat', true);
-						$categories[] = $sub_sub_parent_id;
-						if (isset($product_data[0]['ALCD']) && $product_data[0]['ALCD']) {
-							$sub_sub_value = $product_data[0]['ALCD'];
-							$categories[] = OBSWoocommerceCustomSoft1Helpers::find_child($sub_sub_parent_id, $sub_sub_value, 'product_cat', true);
-						}
-					}
-				}
-			}
-		}
-
-
-		$sizes = array_unique(array_filter(array_map(function ($product) {
-			if (isset($product['Sz'])) return (string) $product['Sz'];
-		}, $product_data)));
-		$colors = array_unique(array_filter(array_map(function ($product) {
-			if (isset($product['COL'])) return (string) $product['COL'];
-		}, $product_data)));
-
-		$available_attributes = [];
-		foreach ($product_data as $product) {
-			$variation_data = [];
-			if (isset($product['Sz'])) {
-				$variation_data[sanitize_title(wc_attribute_taxonomy_name('Μέγεθος'))] = sanitize_title((string) $product['Sz']);
-			}
-			if (isset($product['COL'])) {
-				$variation_data[sanitize_title(wc_attribute_taxonomy_name('Χρώμα'))] = sanitize_title((string) $product['COL']);
-			}
-			if (isset($product['MTRSUP_SUPPLIER_NAME'])) {
-				$available_attributes[] = GlobalOBSWoocommerceCustomSoft1Helpers::set_attribute(['name' => 'Brands', 'options' => $product['MTRSUP_SUPPLIER_NAME'], 'variation' => 0]);
-			}
-			$variations[] = ['attributes' => $variation_data, 'regular_price' => $product['PRC'],  'price' => $product['PRC'],  'sale_price' => $product['pr'], 'MTRL_MTRSUBSTITUTE_CODE' => $product['MTRL_MTRSUBSTITUTE_CODE']];
-		}
-
-		if (count($sizes)) {
-			$available_attributes[] = GlobalOBSWoocommerceCustomSoft1Helpers::set_attribute(['name' => 'Μέγεθος', 'options' => $sizes, 'variation' => 1]);
-		}
-
-		if (count($colors)) {
-			$available_attributes[] = GlobalOBSWoocommerceCustomSoft1Helpers::set_attribute(['name' => 'Χρώμα', 'options' => $colors, 'variation' => 1]);
-		}
-
-
-		$product_id = OBSWoocommerceCustomSoft1Helpers::find_product_id($product_data[0]['MTRL'], 'MTRL');
-		if ($product_id) {
-			$product = wc_get_product($product_id);
-		} else {
-			if (count($variations)) {
-				$product = new WC_Product_Variable();
-			} else {
-				$product = new WC_Product();
-			}
-		}
-
-		//echo $product_id . '<br>';
-
-		if ($product_data[0]['MTRL']) {
-			$product->set_sku($product_data[0]['MTRL']);
-			$product->save();
-		}
-
-		if ($product_data[0]['WEBNAME']) {
-			$product->set_name($product_data[0]['WEBNAME']);
-			$product->set_short_description($product_data[0]['WEBNAME']);
-		}
-
-
-		wc_delete_product_transients($product_id);
-
-		if (count($images)) {
-			$product->set_image_id($images[0]);
-
-			if (sizeof($images) > 1) {
-				array_shift($images);
-				$product->set_gallery_image_ids($images);
-			}
-		}
-		$product->update_meta_data('MTRL', $product_data[0]['MTRL']);
-		$product->set_category_ids($categories);
-		$product->set_attributes($available_attributes);
-		$product->set_manage_stock(true);
-		$product->save();
-
-		if ($product->is_type('variable')) {
-			$mtrls = array_map(function ($var_data) {
-				return $var_data['MTRL_MTRSUBSTITUTE_CODE'];
-			}, $variations);
-			foreach ($product->get_children() as $childId) {
-				$mtrl = get_post_meta($childId, 'MTRL_MTRSUBSTITUTE_CODE', true);
-				if (!in_array($mtrl, $mtrls)) {
-					OBSWoocommerceCustomSoft1Helpers::delete_or_draft_product($childId);
-				}
-			}
-		}
-
-		foreach ($variations as $variation_data) {
-			$variation_id = OBSWoocommerceCustomSoft1Helpers::find_product_id($variation_data['MTRL_MTRSUBSTITUTE_CODE'], 'MTRL_MTRSUBSTITUTE_CODE');
-			if ($variation_id) {
-				$variation = wc_get_product($variation_id);
-			} else {
-				$variation = new WC_Product_Variation();
-			}
-			$variation->set_attributes($variation_data['attributes']);
-			$variation->set_parent_id($product->get_id());
-			$variation->update_meta_data('MTRL_MTRSUBSTITUTE_CODE', $variation_data['MTRL_MTRSUBSTITUTE_CODE']);
-			$variation->set_price($variation_data['price']);
-			$variation->set_regular_price($variation_data['regular_price']);
-			$variation->set_sale_price($variation_data['sale_price']);
-			$variation->set_manage_stock(true);
-			$variation->save();
-		}
-	}
-
-	public function insert_products($products)
-	{
-		if (!empty($products)) // No point proceeding if there are no products
-		{
-			array_map([$this, 'insert_product'], $products); // Run 'insert_product' function from above for each product
-		}
-	}
-
-	public function obs_woocommerce_custom_soft1_create_customer_on_erp($order)
-	{
-		global $wpdb;
-		$table = $wpdb->prefix . 'obs_woocommerce_custom_soft1_customers';
-
-		$client_id = $this->get_client_id();
-
-		if ($client_id == null) {
-			return;
-		}
-		$obs_woocommerce_custom_soft1_options = get_option('obs_woocommerce_custom_soft1_option_name');
-
-		$customer_data = [
-			"service" => "setdata",
-			"clientID" => $this->get_client_id(),
-			"appId" => $obs_woocommerce_custom_soft1_options["appId"],
-			"object" => "CUSTOMER",
-			"key" => "",
-			"data" => [
-				'CUSTOMER' => [
-					[
-						"CODE" => '*',
-						"NAME" => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-						"ADDRESS" => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
-						"CITY" => $order->get_billing_city(),
-						"PHONE01" => $order->get_billing_phone(),
-						"ZIP" => $order->get_billing_postcode(),
-						"EMAIL" => $order->get_billing_email(),
-					]
-				]
-			]
-		];
-		$response_data = $this->get_api_response($customer_data)['body'];
-		if ($response_data) {
-			$response = json_decode(iconv("Windows-1253", "UTF-8", $response_data), TRUE);
-			if (isset($response['success']) && $response['success'] == 'true' && isset($response['id']) && !empty($response['id'])) {
-				update_user_meta($order->get_user_id(), 'obs_custom_soft1_customer_id', $response['id']);
-				return $response['id'];
-			}
-		}
-	}
-
-	public function obs_woocommerce_custom_soft1_sync_failed_orders()
-	{
-		$args = array(
-			'limit'        => -1, // Query all orders
-			'orderby'      => 'date',
-			'order'        => 'DESC',
-			'meta_key'     => 'obs_custom_soft1_order_id', // The postmeta key field
-			'meta_value' => '0'
-		);
-		$orders = wc_get_orders($args);
-		foreach ($orders as $order) {
-			$this->obs_woocommerce_custom_soft1_send_order_to_erp($order->get_id());
-		}
-	}
-
-	public function obs_woocommerce_custom_soft1_send_order_to_erp($order_id)
-	{
-		$obs_custom_soft1_order_id = get_post_meta($order_id, 'obs_custom_soft1_order_id', TRUE);
-		if ($obs_custom_soft1_order_id == 0 || $obs_custom_soft1_order_id == '') {
-			$order = wc_get_order($order_id);
-
-			$cuscode = get_user_meta($order->get_user_id(), 'obs_custom_soft1_customer_id', true);
-			if (!$cuscode) {
-				$cuscode = $this->obs_woocommerce_custom_soft1_create_customer_on_erp($order);
-			}
-			if (!$cuscode) {
-				die('UNABLE TO CREATE CUSTOMER');
-			}
-
-			$obs_woocommerce_custom_soft1_options = get_option('obs_woocommerce_custom_soft1_option_name');
-			$pay_id = '';
-			$payment_method = $order->get_payment_method();
-
-			$shipping_method = @array_shift($order->get_shipping_methods());
-			$shipping_method = $shipping_method['method_id'];
-
-			$payment_method_mapping = json_decode($obs_woocommerce_custom_soft1_options['payment_method_mapping'], true);
-
-			if (isset($payment_method_mapping[$payment_method]) && !empty($payment_method_mapping[$payment_method])) {
-				$pay_id = $payment_method_mapping[$payment_method];
-			}
-
-			$shipping_method_id = '';
-
-			$shipping_method_mapping = json_decode($obs_woocommerce_custom_soft1_options['shipping_method_mapping'], true);
-			if (isset($shipping_method_mapping[$shipping_method]) && !empty($shipping_method_mapping[$shipping_method])) {
-				$shipping_method_id = $shipping_method_mapping[$shipping_method];
-			}
-			$cod_charges = 0;
-			if ($shipping_method_id == 'cod' && isset($obs_woocommerce_custom_soft1_options['cod_charges']) && !empty($obs_woocommerce_custom_soft1_options['cod_charges'])) {
-				$cod_charges = $obs_woocommerce_custom_soft1_options['cod_charges'];
-			}
-
-
-			$items = [];
-			$lineNumber = 9000000;
-
-			foreach ($order->get_items() as $item_id => $item) {
-				$product_id = $item->get_product_id();
-				try {
-					$product_id = $item->get_variation_id();
-				} catch (Exception $e) {
-				}
-				$product = wc_get_product($product_id);
-				$mtrl = get_post_meta($product_id, 'MTRL_MTRSUBSTITUTE_CODE', true);
-				$items[] = [
-					"LINENUM" => ++$lineNumber . '',
-					(!empty($mtrl) ? "SRCHCODE"  : 'MTRL') => !empty($mtrl) ? str_pad($mtrl, 13, '0', STR_PAD_LEFT) : '12479',
-					"QTY1" => $item->get_quantity() . '',
-					"COMMENTS" => $product->get_title() . '',
-					"PRICE" => $product->is_on_sale() ? $product->get_sale_price() : $product->get_regular_price()
-				];
-			}
-
-			$order_data = [
-				"service" => "setdata",
-				"clientId" => $this->get_client_id(),
-				"appId" => $obs_woocommerce_custom_soft1_options["appId"],
-				"object" => 'SALDOC',
-				"ID" => '',
-				"OBJECTPARAMS" => ['IMPORT' => "1"],
-				"DATA" => [
-					"SALDOC" => [
-						[
-							"SERIES" => get_post_meta($order->id, 'invoice', true) == 'yes' ? 7025 : 7024,
-							"TRDR" => $cuscode,
-							"VARCHAR01" => '',
-							"PAYMENT" => $pay_id,
-							"SHIPMENT" => $shipping_method_id,
-							"REMARKS" => '#' . $order_id . ' - ' . $order->get_customer_note(),
-							"TRNDATE" => array_shift(explode(' ', $order->order_date)),
-							"FORM" => "Site"
-						]
-					],
-					"ITELINES" => $items,
-				]
-			];
-
-			if ($cod_charges > 0) {
-				$order_data['DATA']['EXPANAL'][0] = [
-					"LINENUM" => ++$lineNumber . '',
-					"EXPN" => '105',
-					"VAT" => '1410',
-					"EXPVAL" => $cod_charges . ''
-				];
-			}
-			$shipping_total = $order->get_shipping_total() + $order->get_shipping_tax();
-			if ($shipping_total > 0) {
-				$order_data['DATA']['EXPANAL'][1] = [
-					"LINENUM" => ++$lineNumber . '',
-					"EXPN" => '104',
-					"VAT" => '1410',
-					"EXPVAL" => $order->get_shipping_total() . ''
-				];
-			}
-
-			$is_gift = get_post_meta($order->get_id(), 'is_gift', TRUE);
-			if ($is_gift) {
-				$order_data['DATA']["SALDOC"][0]['BOOL01'] = "1";
-			}
-
-
-			$logger = wc_get_logger();
-
-			$logger->info(print_r($order_data, true), array('source' => 'softone-orders-sync'));
-
-
-			if ($order->get_total_discount()) {
-				//$order_data["SALESTRADES"][0]['PRCDISC'] = $order->get_total_discount();
-			}
-			// echo '<pre>';
-			// print_r($order_data);
-			// print_r($obs_woocommerce_custom_soft1_options);
-			// die();
-
-			$logger = wc_get_logger();
-
-			$response_data = $this->get_api_response($order_data);
-			if ($response_data) {
-				$response = json_decode(iconv("Windows-1253", "UTF-8", $response_data['body']), TRUE);
-
-				if (isset($response['error']) && !empty($response['error'])) {
-					if ($obs_custom_soft1_order_id !== 0) {
-
-						// wp_mail(get_option('admin_email'), 'Order ('.$order_id.') Failed to Sync With ERP', $order_id .' has failed to sync with the ERP system. We will try to sync it again in next cron run or you can manually sync failed orders from plugin settings page.');
-						$logger->info('Order (' . $order_id . ') Failed to Sync With ERP', array('source' => 'softone-orders-sync'));
-						$logger->info('Request', array('source' => 'softone-orders-sync'));
-						$logger->info(wc_print_r($order_data, true), array('source' => 'softone-orders-sync'));
-						$logger->info('Response', array('source' => 'softone-orders-sync'));
-						$logger->info(wc_print_r($response, true), array('source' => 'softone-orders-sync'));
-					}
-					update_post_meta($order_id, 'obs_custom_soft1_order_id', 0);
-				} else if (isset($response['success']) && isset($response['id'])) {
-					update_post_meta($order_id, 'obs_custom_soft1_order_id', $response['id']);
-				}
-			}
-		}
-	}
+	
 
 
 
@@ -767,9 +280,6 @@ class OBSWoocommerceCustomSoft1
 
 	public function activate_obs_woocommerce_custom_soft1()
 	{
-		if (!wp_next_scheduled('obs_woocommerce_custom_soft1_get_products')) {
-			wp_schedule_event(strtotime('01:00:00'), 'daily', 'obs_woocommerce_custom_soft1_get_products', []);
-		}
 		if (!wp_next_scheduled('obs_woocommerce_custom_soft1_get_products_stock')) {
 			wp_schedule_event(time(), 'every_3_hours', 'obs_woocommerce_custom_soft1_get_products_stock', []);
 		}
@@ -826,9 +336,7 @@ class OBSWoocommerceCustomSoft1
 				<?php
 				if (is_array(get_option('obs_woocommerce_custom_soft1_option_name')) && array_filter(get_option('obs_woocommerce_custom_soft1_option_name')) !== []) {
 					submit_button('TEST CONNECTION', 'secondary', 'test_connection', false);
-					submit_button('EXPORT PRODUCT CSV', 'secondary', 'export_csv', false);
-					submit_button('EXPORT STOCK RAW CSV', 'secondary', 'export_stock_raw_csv', false);
-					submit_button('EXPORT STOCK CSV', 'secondary', 'export_stock_csv', false);
+					submit_button('EXPORT PRODUCT STOCK CSV', 'secondary', 'export_stock_raw_csv', false);
 				}
 				?>
 			</form>
